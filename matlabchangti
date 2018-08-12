@@ -1,0 +1,74 @@
+
+function out=matlabchangti(Bs,E,p,u)
+recoder=[];
+for n=0:8;  % n是肋骨个数,取2-8
+    for R=71:91;  % R耐压壳的理论半径
+        for t=1:12;  % t为壳板的厚度
+            L=400;  %耐压舱圆柱形设计长度 400mm
+            l=L/(n+1);  %l是肋骨间距
+            
+            %u=0.35;  %泊松比
+            Pj=10*1.5;  %计算压力
+            %E=11500;  %材料弹性模量 
+            %Bs=840;  %屈服极限
+            b=8;  %肋骨厚度
+            %p=0.0044500;  %材料密度，单位kg/mm^3
+            h=25;  %肋骨宽度
+            F=b*h;  %肋骨型材剖面积
+            B=l*t/F; % l*t一个跨度上壳体面积   B为beita，即肋骨对壳体的影响参数
+            
+            %应力计算
+            I=b*h^3/12+l*t^3/12+(0.5*h+0.5*t)^2*l*t*F/(l*t+F); %惯性矩计算
+            r=sqrt(3*(1-u^2))/2*(Pj*R^2/(E*t^2));  % r为伽马，
+            U=(3*(1-u^2))^(1/4)/2*l/sqrt(R*t);  %壳体几何形状计算参数
+            
+            U1=U*sqrt(1-r);  %壳体几何形状计算参数
+            U2=U*sqrt(1+r);  %壳体几何形状计算参数
+            
+            F5=U2*sinh(2*U1)+U1*sin(2*U2);  %肋骨截面积
+            F1=sqrt(1-r^2)*(cosh(2*U1)-cos(2*U2))/F5;  %肋骨截面积
+            F2=3*(1-0.5*u)*(U2*sinh(2*U1)-U1*sin(2*U2))/sqrt(3*(1-u^2))/F5;  %肋骨截面积
+            F3=6*(1-0.5*u)*(U1*cosh(U1)*sin(U2)-U2*sinh(U1)*cos(U2))/sqrt(3*(1-u^2))/F5;  %肋骨截面积 
+            F4=2*(1-0.5*u)*(U1*cosh(U1)*sin(U2)+U2*sinh(U1)*cos(U2))/F5;  %肋骨截面积
+            
+            
+%强度计算
+            K(1)=1-F4/(1+B*F1);  %肋骨存在对壳板应力的影响
+            out1=K(1)*Pj*R/t;  %跨度中点处壳纵剖面上的中面应力
+            K(2)=0.5+F2/(1+B*F1);  %肋骨存在对壳板应力的影响
+            out2=K(2)*Pj*R/t;  %支座边界处壳横剖面上的内表面应力
+            K(3)=(1-u/2)*B*F1/(1+B*F1);  %肋骨存在对壳板应力的影响
+            out3=K(3)*Pj*R/t;  %肋骨应力
+            out4q=Pj*R/(2*t);  %球形耐压壳应力计算？？？
+            out1bool=(out1<=0.85*Bs);  %判断应力1，out1bool为1，符合强度标准
+            out2bool=(out2<=1.15*Bs);  %判断应力2，out1bool为1，符合强度标准
+            out3bool=(out3<=0.60*Bs);   %判断应力f
+            out4qbool=(out4q<=0.85*Bs);  %判断封头应力
+           
+%稳性校核
+            a=pi*R/L;  %a为阿尔法     
+            
+            en=2;           
+            P1=((E*I/(l*R^3))*(en*en-1)^2+E*t*a^4/(R*(a*a+en*en)^2))/((en^2-1+0.5*a^2));  %环肋圆柱壳的舱段总体稳定性
+            P2=0.6*E*((t/R)^2)/(0.463*l/sqrt(R*t)-0.37);  %肋骨间壳板的稳定性
+            
+            bili1=P2*R/(t*Bs);  %环肋σe/σs
+            bili2=P1*R/(t*Bs);  %舱段σe/σs
+            
+            Cs2=0.3*atan(-1.4924*(bili1-1.5))+0.0053/bili1+0.0969*3^(-bili1)+0.6616;  %舱段Cs
+            Cs1=0.3*atan(-1.4924*(bili2-1.5))+0.0053/bili2+0.0969*3^(-bili2)+0.6616;  %环肋Cs
+            
+            out4=0.75*Cs2*P2 ;  %环肋圆柱壳壳板失稳校核公式
+            out4bool=(out4>=Pj);  % out4bool为1，符合稳性标准
+            out5=0.83*Cs1*P1;  %舱段总体稳性校核公式
+            out5bool=(out5>=1.2*Pj);  % out5bool为1，符合稳性标准
+            if out1bool*out2bool*out3bool*out4bool*out5bool==1  %判断符合标准
+                M=p*pi*((R+t)^2-R^2)*L+p*pi*((R+t+h)^2-(R+t)^2)*n*b;  %计算耐压壳质量
+                recoder=[recoder;n,R,t,M];  % [肋骨数目；设计半径；设计厚度；设计质量]
+            end
+        end
+    end
+end
+recoder_new=sortrows(recoder,4);  %第四列，按从小到大排序，得到质量最优的参数
+out=recoder_new(1,:)  %输出第一行参数
+out(4)=out(4)/1000;
